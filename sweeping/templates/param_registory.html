@@ -1,0 +1,839 @@
+
+{% extends 'main.html' %}
+
+{% block content %}
+
+<script>
+    function showAddRecordModal() {
+        const modal = document.getElementById('AddRecordModal');
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+    
+    function closeAddRecordModal() {
+        const modal = document.getElementById('AddRecordModal');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    function showDetailViewModal(paramId) {
+        setTimeout(() => {
+            fetch("{% url 'get_parameter_data' 0 %}".replace('0', paramId))
+                .then(response => response.json())
+                .then(data => {
+                    function safeSetValue(id, value) {
+                        const element = document.getElementById(id);
+                        if (element) {
+                            element.value = value || '';
+                            if (id === 'param_Record_Time' || id === 'param_Update_Time') {
+                                element.style.backgroundColor = '#ffffff';
+                                element.style.color = '#333333';
+                                element.style.border = '1px solid #dcdfe6';
+                            }
+                        } else {
+                            console.warn(`元素 ${id} 不存在`);
+                        }
+                    }
+                    
+                    safeSetValue('param_Name', data.param_Name);
+                    safeSetValue('param_DataType', data.param_DataType_display || data.param_DataType);
+                    safeSetValue('param_Nst', data.param_Nst_display || data.param_Nst);
+                    safeSetValue('param_Value', data.param_Value);
+                    safeSetValue('param_ValUnit', data.param_ValUnit);
+                    safeSetValue('param_OrgID', data.param_OrgID);
+                    safeSetValue('param_PrevValue', data.param_PrevValue);
+                    safeSetValue('param_ChaID', data.param_ChaID);
+                    safeSetValue('param_NextValue', data.param_NextValue);
+                    safeSetValue('param_State', data.param_State_display || data.param_State);
+                    safeSetValue('param_Operator', data.param_Operator);
+                    safeSetValue('param_DeviceID', data.param_DeviceID);
+                    safeSetValue('param_Device_Type', data.param_Device_Type_display || data.param_Device_Type);
+                    safeSetValue('param_Users_Remark', data.param_Users_Remark);
+                    safeSetValue('param_Record_Time', data.param_Record_Time || '2025-01-01 12:00:00');
+                    safeSetValue('param_Update_Time', data.param_Update_Time || '2025-01-02 14:30:00');
+                    safeSetValue('param_Is_Active', data.param_Is_Active ? '是' : '否');
+                    
+                    const form = document.getElementById('detailViewForm');
+                    if (form) {
+                        form.action = "{% url 'rcp_regDetail' 0 %}".replace('0', paramId);
+                    }
+                })
+                .catch(error => {
+                    console.error('请求出错:', error);
+                });
+        }, 9);
+    }
+
+    function closeDetailViewModal() {
+        const vueInstance = document.getElementById('registory').__vue__;
+        if (vueInstance) {
+            vueInstance.detailDialogVisible = false;
+        }
+    }
+
+    // 处理表单提交
+    function handleDetailFormSubmit(event) {
+        event.preventDefault();
+        
+        const form = event.target;
+        const formData = new FormData(form);
+        
+        const vueInstance = document.getElementById('registory').__vue__;
+        if (vueInstance) {
+            vueInstance.$message({
+                type: 'info',
+                message: '正在保存...'
+            });
+        }
+        
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.json();
+            }
+            throw new Error('保存失败');
+        })
+        .then(data => {
+            if (vueInstance) {
+                vueInstance.$message({
+                    type: 'success',
+                    message: '备注保存成功！'
+                });
+                vueInstance.detailDialogVisible = false;
+            }
+        })
+        .catch(error => {
+            console.error('保存出错:', error);
+            if (vueInstance) {
+                vueInstance.$message({
+                    type: 'error',
+                    message: '保存失败，请重试'
+                });
+            }
+        });
+    }
+</script>
+
+<div id="registory" class="prm-reg-main">
+    
+    <div class="prm-header">
+        <h2 class="prm-title">历史记录</h2>
+        <div>
+            <button  class="prm-btn submit" onclick="showParamModal()" style="margin-right: 10px;">添加</button>
+            <button  class="prm-btn export" @click="exportCSV">导出报表</button>
+        </div>
+    </div>
+    
+    <div ref="prmFuncBody" id="registoryBody" style="padding:20px 0px 32px 0px; max-width:1400px; max-height: 480px; overflow-y: auto;">
+        <!-- 搜索区域 -->
+        <el-card>
+            <el-form :inline="true" size="medium" :model="searchForm" class="mb-3" @submit.native.prevent>
+                <el-form-item label="设备名称" style="margin: 0 16px 0 0;">
+                    <el-input v-model="searchForm.deviceName" placeholder="如：清扫车" clearable style="width:10rem"></el-input>
+                </el-form-item>
+                <el-form-item label="参数名称" style="margin: 0 16px 0 0;">
+                    <el-input v-model="searchForm.paramName" placeholder="如：巡航速度" clearable style="width:10rem"></el-input>
+                </el-form-item>
+                <el-form-item label="时间范围" style="margin: 0 16px 0 0; width: 22rem;">
+                    <el-col :span="11">
+                        <el-date-picker v-model="searchForm.startDate" type="date" value-format="yyyy-MM-dd" placeholder="开始日期" style="width: 8rem;"></el-date-picker>
+                    </el-col>
+                    <el-col class="line" :span="2" style="margin-left: 4px; margin-right: -10px;">－</el-col>
+                    <el-col :span="11">
+                        <el-date-picker v-model="searchForm.endDate" type="date" value-format="yyyy-MM-dd" placeholder="结束日期" style="width: 8rem;"></el-date-picker>
+                    </el-col>
+                </el-form-item>
+                <el-form-item style="margin: 0;">
+                    <el-button type="primary" icon="el-icon-search" @click="doSearch">查询</el-button>
+                    <el-button type="primary" plain @click="showCompare">对比</el-button>
+                    <el-tooltip content="重置搜索" placement="top" :open-delay="500" :hide-after="5000">
+                        <el-button type="danger" plain @click="resetSearch" icon="el-icon-refresh"></el-button>
+                    </el-tooltip>
+                </el-form-item>
+            </el-form>
+        </el-card>
+        
+        <!-- 数表区域 -->
+        {% verbatim %}
+        <div ref="prmTable" style="width: 100%; max-width: 72.8rem; overflow-x: auto;">
+            <el-table
+                class="prm-table"
+                :data="filteredParameters"
+                height="450"
+                style="width: 100%; min-width: 20rem;"
+                ref="paramTable"
+                @selection-change="handleSelection"
+                :row-class-name="tableRowClassName"
+            >
+                <el-table-column type="selection" width="50" fixed="left"></el-table-column>
+                
+                <el-table-column prop="id" label="NID" sortable width="79" fixed="left"></el-table-column>
+                
+                <el-table-column prop="name" label="参数名" sortable width="149" fixed="left"></el-table-column>
+                
+                <el-table-column prop="code" label="数据类型" width="100"></el-table-column>
+                
+                <el-table-column prop="value" label="参数值" width="100"></el-table-column>
+                
+                <el-table-column prop="unit" label="单位" width="80"></el-table-column>
+                
+                <el-table-column 
+                    prop="state" 
+                    label="状态" 
+                    sortable width="89"
+                    :filters="[{ text: '仅提交', value: '仅提交' }, { text: '已标定', value: '已标定' }, { text: '出错', value: '出错' }]"
+                    :filter-method="filterTag"
+                    filter-placement="bottom-end"
+                >
+                    <template slot-scope="scope">
+                        {{ scope.row.state_display }}
+                    </template>
+                </el-table-column>
+                
+                <el-table-column prop="created_at" label="记录时间" sortable width="199">
+                    <template slot-scope="scope">
+                        {{ scope.row.created_at | dateFormat }}
+                    </template>
+                </el-table-column>
+
+                <el-table-column prop="update_at" label="更新时间" sortable width="199">
+                    <template slot-scope="scope">
+                        {{ scope.row.update_at | dateFormat }}
+                    </template>
+                </el-table-column>
+            
+                <el-table-column prop="oid" label="源" sortable width="99"></el-table-column>
+                
+                <el-table-column prop="user" label="操作人" sortable width="99"></el-table-column>
+                
+                <el-table-column prop="description" label="用户备注" min-width="159"></el-table-column>
+                
+                <el-table-column label="操作" width="80" fixed="right">
+                    <template slot-scope="scope">
+                        <el-button size="mini" @click="showRecordDetail(scope.row.id)" type="primary" plain>详情</el-button>
+                    </template>
+                </el-table-column>
+            </el-table>
+            
+            <el-backtop 
+                target="#registoryBody"
+                @click="handleTableScroll"
+                :visibility-height="50"
+                right="70" bottom="90"
+                style="color: #ffffff; background-color: #1a73e8;"
+            ></el-backtop>
+        </div>
+        {% endverbatim %}
+        
+        <!-- 详情弹窗 -->
+        <el-dialog
+            :visible.sync="detailDialogVisible"
+            width="60rem"
+            :before-close="closeDetailDialog"
+        >
+            <template slot="title">
+                <span style="font-size: 20px;">参数历史记录详情</span>
+                <el-button size="mini" @click="viewParamDetailPage" icon="el-icon-full-screen" style="margin-top: -2px; margin-right: 24px; float: right;">展开</el-button>
+            </template>
+
+            <form id="detailViewForm" class="modal-form" style="padding: 0;" action="/prmReg_viewDtl/" method="post" @submit="handleFormSubmit">
+                <!-- 表单元素 -->
+                {% csrf_token %}
+                <div class="prm-cols">
+                    <div class="left-col">
+                        <div class="prm-form">
+                            <label>参数名</label>
+                            <input type="text" id="param_Name" readonly>
+                            <div class="error-msg"></div>
+                        </div>
+            
+                        <div class="form-row">
+                            <div class="prm-form">
+                                <label>数据类型</label>
+                                <input type="text" id="param_DataType" readonly>
+                                <div class="error-msg"></div>
+                            </div>
+                            
+                            <div class="prm-form">
+                                <label>进制</label>
+                                <input type="text" id="param_Nst" readonly>
+                                <div class="error-msg"></div>
+                            </div>
+                        </div>
+                    
+                        <div class="form-row">
+                            <div class="prm-form">
+                                <label>参数值</label>
+                                <input type="text" id="param_Value" readonly>
+                            </div>
+                            
+                            <div class="prm-form">
+                                <label>单位</label>
+                                <input type="text" id="param_ValUnit" readonly>
+                            </div>
+                            <div class="error-msg"></div>
+                        </div>
+            
+                        <div class="form-row">
+                            <div class="prm-form">
+                                <label>创建时间</label>
+                                <input type="text" id="param_Record_Time" readonly>
+                                <div class="error-msg"></div>
+                            </div>
+            
+                            <div class="prm-form">
+                                <label>更新时间</label>
+                                <input type="text" id="param_Update_Time" readonly>
+                                <div class="error-msg"></div>
+                            </div>
+                        </div>
+                    </div>
+            
+                    <div class="right-col">
+                        <div class="prm-form">
+                            <label>参数状态</label>
+                            <input type="text" id="param_State" readonly>
+                            <div class="error-msg"></div>
+                        </div>
+            
+                        <div class="prm-form">
+                            <label>操作人</label>
+                            <input type="text" id="param_Operator" readonly>
+                            <div class="error-msg"></div>
+                        </div>
+            
+                        <div class="form-row">
+                            <div class="prm-form">
+                                <label>上一值</label>
+                                <input type="text" id="param_PrevValue" readonly>
+                            </div>
+                            
+                            <div class="prm-form">
+                                <label>下一值</label>
+                                <input type="text" id="param_NextValue" readonly>
+                            </div>
+                            <div class="error-msg"></div>
+                        </div>
+                    
+                        <div class="prm-form">
+                            <label>用户备注</label>
+                            <input type="text" id="param_Users_Remark" name="param_Users_Remark" value="">
+                            <div class="error-msg"></div>
+                        </div>
+                        
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="modal-btn cancel" @click="closeDetailDialog">关闭</button>
+                    <button type="submit" class="modal-btn submit">保存备注</button>
+                </div>
+            </form>
+        </el-dialog>
+    </div>
+
+    <!-- 对比柱状图 -->
+    <el-drawer
+        title="标题历史数据对比"
+        size="50%"
+        :visible.sync="compareDrawer"
+        direction="rtl"
+        :before-close="() => compareDrawer = false"
+    >
+        <div v-if="compareRecords.length >= 2">
+            {% verbatim %}
+            <div style="display:flex;align-items:flex-end;gap:18px;height:220px;">
+                <div v-for="item in compareRecords" :key="item.id" style="flex:1;flex-direction:column;text-align:center;">
+                    <div :style="{
+                        background:'#1a73e8',
+                        height:barHeight(item)+'px',
+                        maxWidth:'4rem',
+                        transition:'height 0.3s',
+                        color:'#fff',
+                        borderRadius:'4px 4px 0 0',
+                        display:'flex',
+                        alignItems:'flex-end',
+                        justifyContent:'center',
+                        fontSize:'13px'
+                    }">
+                        {{ extractNum(item.value) }}
+                    </div>
+                    <div style="margin-top: 5px;">
+                        {{ item.name }}<br>
+                        <span style="color:#6475bb;">{{ item.value }} {{ item.unit }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endverbatim %}
+            <div style="margin-top: 18px;">对比项：调整后数值</div>
+        </div>
+        <div v-else style="color:#f56c6c;">请选择至少两条记录进行对比</div>
+        <span slot="footer">
+            <el-button @click="compareDrawer=false">关闭</el-button>
+        </span>
+    </el-drawer>
+</div>
+
+<!-- 添加新参数弹窗 -->
+<div class="modal-overlay" id="AddRecordModal">
+    <div class="modal-container">
+        <form id="parameterForm" class="modal-form" data-base-action="{% url 'rcp_regDetail' 0 %}" method="post">
+            <!-- 表单元素 -->
+            {% csrf_token %}
+            <div class="prm-form">
+                <label>参数名</label>
+                <input type="text" name="param_Name" required>
+                <div class="error-msg"></div>
+            </div>
+            
+            <div class="prm-form">
+                <label>数据类型</label>
+                <input type="text" name="param_DataType" required>
+                <div class="error-msg"></div>
+            </div>
+            
+            <div class="prm-form">
+                <label>进制</label>
+                <input type="text" name="param_BODH" required>
+                <div class="error-msg"></div>
+            </div>
+            
+            <div class="form-row">
+                <div class="prm-form">
+                    <label>参数值</label>
+                    <input type="text" name="param_Value" required>
+                </div>
+                
+                <div class="prm-form">
+                    <label>单位</label>
+                    <input type="text" name="param_ValUnit" required>
+                </div>
+            </div>
+            
+            <div class="prm-form">
+                <label>源</label>
+                <input type="text" name="param_Origin" required>
+            </div>
+            
+            <div class="prm-form">
+                <label>参数状态</label>
+                <input type="text" name="param_State" required>
+            </div>
+            
+            <div class="prm-form">
+                <label>用户备注</label>
+                <input type="text" name="param_Users_Remark">
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" class="modal-btn cancel" onclick="closeAddRecordModal()">取消</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 数据接口 -->
+<script type="application/json" id="param-data">
+    {{ parameters_json|safe }}
+</script>
+
+<script>
+    // var parametersFromDjango = {{ parameters_json|safe }};
+    var parametersFromDjango = JSON.parse(document.getElementById('param-data').textContent);
+
+    new Vue({ 
+        el: '#registory',
+        filters: {
+            dateFormat: function(value) {
+                if (!value) return '';
+                
+                try {
+                    let date;
+                    // 如果是时间戳
+                    if (typeof value === 'number') {
+                        date = new Date(value);
+                    }
+                    // 如果是字符串，转换为Date对象
+                    else if (typeof value === 'string') {
+                        date = new Date(value);
+                    }
+                    // 如果已经是Date对象
+                    else if (value instanceof Date) {
+                        date = value;
+                    }
+                    else {
+                        return '';
+                    }
+                    
+                    // 检查是否是有效日期
+                    if (isNaN(date.getTime())) {
+                        return value; // 如果无法解析，返回原值
+                    }
+                    
+                    // 格式化为 YYYY-MM-DD HH:mm:ss
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const hours = String(date.getHours()).padStart(2, '0');
+                    const minutes = String(date.getMinutes()).padStart(2, '0');
+                    const seconds = String(date.getSeconds()).padStart(2, '0');
+                    
+                    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+                } catch (error) {
+                    console.warn('时间格式化错误:', error);
+                    return value; // 出错时返回原值
+                }
+            }
+        },
+        data() {
+            return {
+                parameters: parametersFromDjango,
+                searchForm: {
+                    deviceName: '',
+                    paramName: '',
+                    startDate: '',
+                    endDate: ''
+                },
+                selectedRows: [],
+                compareDrawer: false,
+                compareRecords: [],
+                detailDialogVisible: false,
+                detailDialogValueID: null,
+                scrollTimer: null
+            }
+        },
+        computed: {
+            // 计算属性：根据搜索条件过滤数据
+            filteredParameters() {
+                let filtered = this.parameters;
+                
+                // 根据设备名称过滤（假设数据中有 device_name 字段）
+                if (this.searchForm.deviceName) {
+                    filtered = filtered.filter(item => {
+                        const deviceName = item.device_name || item.deviceName || item.name || '';
+                        return deviceName.toLowerCase().includes(this.searchForm.deviceName.toLowerCase());
+                    });
+                }
+                
+                // 根据参数名称过滤
+                if (this.searchForm.paramName) {
+                    filtered = filtered.filter(item => {
+                        const paramName = item.name || item.param_name || item.paramName || '';
+                        return paramName.toLowerCase().includes(this.searchForm.paramName.toLowerCase());
+                    });
+                }
+                
+                // 根据时间范围过滤
+                if (this.searchForm.startDate) {
+                    filtered = filtered.filter(item => {
+                        const itemDate = item.edit_at || item.update_time || item.record_time || '';
+                        if (!itemDate) return false;
+                        
+                        // 将日期字符串转换为可比较的格式
+                        const itemDateStr = new Date(itemDate).toISOString().split('T')[0];
+                        return itemDateStr >= this.searchForm.startDate;
+                    });
+                }
+                
+                if (this.searchForm.endDate) {
+                    filtered = filtered.filter(item => {
+                        const itemDate = item.edit_at || item.update_time || item.record_time || '';
+                        if (!itemDate) return false;
+                        
+                        // 将日期字符串转换为可比较的格式
+                        const itemDateStr = new Date(itemDate).toISOString().split('T')[0];
+                        return itemDateStr <= this.searchForm.endDate;
+                    });
+                }
+                
+                return filtered;
+            }
+        },
+        mounted() {
+            this.$nextTick(() => {
+                this.startScrollMonitor();
+            });
+            this.$refs.prmTable.addEventListener('wheel', this.handleChildWheel, { passive: false });
+        },
+        beforeDestroy() {
+            this.clearScrollMonitor();
+            this.$refs.prmTable.removeEventListener('wheel', this.handleChildWheel);
+        },
+        methods: {
+            // 执行搜索（现在主要用于清空选择）
+            doSearch() {
+                // 清空之前的选择
+                this.selectedRows = [];
+                if (this.$refs.paramTable) {
+                    this.$refs.paramTable.clearSelection();
+                }
+                
+                // 显示搜索结果提示
+                this.$message({
+                    type: 'success',
+                    message: `找到 ${this.filteredParameters.length} 条记录`
+                });
+            },
+            
+            // 重置搜索条件
+            resetSearch() {
+                this.searchForm = {
+                    deviceName: '',
+                    paramName: '',
+                    startDate: '',
+                    endDate: ''
+                };
+                
+                // 清空选择
+                this.selectedRows = [];
+                if (this.$refs.paramTable) {
+                    this.$refs.paramTable.clearSelection();
+                }
+                
+                this.$message({
+                    type: 'info',
+                    message: '搜索条件已重置'
+                });
+            },
+            
+            showRecordDetail(row) {
+                this.detailDialogValueID = row;
+                this.detailDialogVisible = true;
+                // 等待弹窗完全显示后再执行数据设置
+                this.$nextTick(() => {
+                    this.$nextTick(() => {
+                        showDetailViewModal(row);
+                    });
+                });
+            },
+
+            // 关闭详情弹窗
+            closeDetailDialog() {
+                this.detailDialogVisible = false;
+                this.detailDialogValueID = null;
+            },
+            
+            // 展开记录详情
+            viewParamDetailPage() {
+                const viewDetailUrl = "{% url 'rcp_viewDetail' %}";
+                window.location.href = `${viewDetailUrl}?event=${this.detailDialogValueID}`;
+            },
+
+            // 处理表单提交
+            handleFormSubmit(event) {
+                event.preventDefault();
+                
+                const form = event.target;
+                const formData = new FormData(form);
+                
+                // 显示加载状态
+                this.$message({
+                    type: 'info',
+                    message: '正在保存...'
+                });
+                
+                // 提交表单数据
+                fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    }
+                    throw new Error('保存失败');
+                })
+                .then(data => {
+                    this.$message({
+                        type: 'success',
+                        message: '备注保存成功！'
+                    });
+                    // 关闭弹窗
+                    this.detailDialogVisible = false;
+                })
+                .catch(error => {
+                    console.error('保存出错:', error);
+                    this.$message({
+                        type: 'error',
+                        message: '保存失败，请重试'
+                    });
+                });
+            },
+            
+            exportCSV() {
+                // 导出当前过滤后的数据
+                if (!this.filteredParameters.length) {
+                    this.$message.warning("没有可以导出的数据");
+                    return;
+                }
+                let csvRows = [];
+                csvRows.push("ID,参数名,数据类型,参数值,单位,状态,记录时间,源,操作人,用户备注");
+                this.filteredParameters.forEach(item => {
+                    const row = [
+                        item.id || '',
+                        item.name || '',
+                        item.code || '',
+                        item.value || '',
+                        item.unit || '',
+                        item.state_display || item.state || '',
+                        this.$options.filters.dateFormat(item.edit_at) || '',
+                        item.oid || '',
+                        item.user || '',
+                        item.description || ''
+                    ];
+                    csvRows.push(row.join(","));
+                });
+                let csvString = csvRows.join("\n");
+                let blob = new Blob([csvString], {type: "text/csv;charset=utf-8"});
+                let url = window.URL.createObjectURL(blob);
+                let a = document.createElement("a");
+                a.href = url;
+                a.download = "参数历史记录.csv";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                this.$message({
+                    type: 'success',
+                    message: `已导出 ${this.filteredParameters.length} 条记录`
+                });
+            },
+            handleSelection(val) {
+                this.selectedRows = val;
+            },
+            showCompare() {
+                if (!this.selectedRows || this.selectedRows.length < 2) {
+                    this.$message.warning("请至少选择两条记录进行对比");
+                    return;
+                }
+                this.compareRecords = this.selectedRows.map(x=>({...x}));
+                this.compareDrawer = true;
+            },
+            extractNum(str) {
+                let m = (str||'').toString().match(/[\d.]+/);
+                return m ? parseFloat(m[0]) : 0;
+            },
+            barHeight(item) {
+                // 归一化到最大180px
+                if (!this.compareRecords.length) return 0;
+                let nums = this.compareRecords.map(x=>this.extractNum(x.value));
+                let max = Math.max(...nums, 1);
+                let val = this.extractNum(item.value);
+                return Math.round((val / max) * 180);
+            },
+            tipsMessageShow() {
+                this.$message({
+                    showClose: true,
+                    message: '滚动页面以查看完整表格。'
+                });
+            },
+            startScrollMonitor() {
+                if (!localStorage.getItem('tipsHadShown')) {
+                    this.$refs.prmFuncBody.addEventListener('scroll', this.handleScrollOnce, { passive: true });
+                    this.scrollTimer = setTimeout(() => {
+                        this.tipsMessageShow();
+                        localStorage.setItem('tipsHadShown', 'true');
+                    }, 5000);
+                }
+            },
+            clearScrollMonitor() {
+                if (this.scrollTimer) {
+                    clearTimeout(this.scrollTimer);
+                    this.scrollTimer = null;
+                }
+                this.$refs.prmFuncBody.removeEventListener('scroll', this.handleScrollOnce);
+            },
+            handleScrollOnce() {
+                this.clearScrollMonitor();
+                localStorage.setItem('tipsHadShown', 'true');
+            },
+            tableRowClassName({ row }) {
+                if (row.state_display === '出错') {
+                    return 'warning-row';
+                } else if (row.state_display === '已标定') {
+                    return 'success-row';
+                }
+                return '';
+            },
+            filterTag(values, row) {
+                return values.includes(row.state_display);
+            },
+            filterHandler(values, row, column) {
+                const property = column['property'];
+                return row[property] === values;
+            },
+            handleChildWheel(e) {
+                const child = this.$refs.prmTable;
+                const parent = this.$refs.prmFuncBody;
+
+                // 表格主体元素在顶部
+                const atChildTop = child.scrollTop === 0;
+                const scrollDown = e.deltaY > 0;
+                const parentNotAtBottom = parent.scrollTop + parent.offsetHeight < parent.scrollHeight - 1; // -1 防止浮点误差
+
+                if (atChildTop && scrollDown && parentNotAtBottom) {
+                    e.preventDefault();
+                    parent.scrollTo({ top: parent.scrollHeight, behavior: 'smooth' });
+                    // 此时不让子元素滚动
+                }  
+            },
+            handleTableScroll() {
+                const table = this.$refs.paramTable;
+                const wrapper = table.$el.querySelector('.el-table__body-wrapper');
+                if (wrapper) {
+                    wrapper.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            }
+        }
+    });
+</script>
+
+{% endblock %}
+
+
+<!-- 编辑参数弹窗 -->
+<!--div class="modal-overlay" id="detailViewModal">
+<div class="modal-container">
+    <form id="editParameterForm" class="modal-form" action="/edit_parameter/" method="post">
+        {% csrf_token %}
+        <div class="prm-form">
+            <label>参数名</label>
+            <input type="text" id="param_Name" name="param_Name" required value="">
+            <div class="error-msg"></div>
+        </div>
+        
+        <div class="prm-form">
+            <label>数据类型</label>
+            <input type="text" id="param_DataType" name="param_DataType" required value="">
+            <div class="error-msg"></div>
+        </div>
+        
+        <div class="form-row">
+            <div class="prm-form">
+                <label>参数值</label>
+                <input type="text" id="param_Value" name="param_Value" required value="">
+            </div>
+            
+            <div class="prm-form">
+                <label>单位</label>
+                <input type="text" id="param_ValUnit" name="param_ValUnit" required value="">
+            </div>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" class="modal-btn cancel" onclick="closeDetailViewModal()">取消</button>
+                <button type="submit" class="modal-btn submit">保存参数</button>
+            </div>
+        </form>
+    </div>
+</div-->

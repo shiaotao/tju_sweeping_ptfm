@@ -1,0 +1,33 @@
+{% extends 'main.html' %}
+
+{% block content %}
+<h2>添加车辆</h2>
+<form method="post">
+    {% csrf_token %}
+    <div class="mb-3">
+        <label for="vehicle_number" class="form-label">车辆编号</label>
+        <input type="text" class="form-control" id="vehicle_number" name="vehicle_number" required>
+    </div>
+    <div class="mb-3">
+        <label for="vin_code" class="form-label">VIN</label>
+        <input type="text" class="form-control" id="vin_code" name="vin_code" required>
+    </div>
+    <div class="mb-3">
+        <label for="license_plate" class="form-label">车牌号</label>
+        <input type="text" class="form-control" id="license_plate" name="license_plate" required>
+    </div>
+    <div class="mb-3">
+        <label for="manufacturer" class="form-label">生产厂家</label>
+        <input type="text" class="form-control" id="manufacturer" name="manufacturer" required>
+    </div>
+    <div class="mb-3">
+        <label for="brand" class="form-label">品牌</label>
+        <input type="text" class="form-control" id="brand" name="brand" required>
+    </div>
+    <div class="mb-3">
+        <label for="operation_date" class="form-label">投入运营日期</label>
+        <input type="date" class="form-control" id="operation_date" name="operation_date" required>
+    </div>
+    <button type="submit" class="btn btn-primary">保存</button>
+</form>
+{% endblock %}

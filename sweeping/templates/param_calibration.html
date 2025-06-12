@@ -1,0 +1,1050 @@
+{% extends 'main.html' %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/calibration.css' %}">
+<style>
+.search-filter-section {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #f5f5f5;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.search-group {
+    margin-bottom: 15px;
+}
+
+.search-group input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.filter-group {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.filter-group select {
+    flex: 1;
+    min-width: 150px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: white;
+}
+
+.search-group input:focus,
+.filter-group select:focus {
+    outline: none;
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 2px rgba(74,144,226,0.2);
+}
+</style>
+{% csrf_token %}
+<script>
+    function showParameterModal() {
+        const modal = document.getElementById('parameterModal');
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+    
+    function closeParameterModal() {
+        const modal = document.getElementById('parameterModal');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    // 修改后的filterParameters函数
+    function filterParameters() {
+        const searchName = document.getElementById('searchName').value.toLowerCase();
+        const filterType = document.getElementById('filterType').value;
+        const filterDeviceType = document.getElementById('filterDeviceType').value;
+        const filterIsActive = document.getElementById('filterIsActive').value;
+    
+        const rows = document.querySelectorAll('.parameter-table tbody tr:not(.hidden)');
+        
+        rows.forEach(row => {
+            const name = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+            const type = row.querySelector('td:nth-child(3)').textContent;
+            const isActive = row.querySelector('td:nth-child(6) input').checked;
+            const deviceType = row.querySelector('td:nth-child(7)').textContent;
+    
+            const nameMatch = searchName === '' || name.includes(searchName);
+            const typeMatch = filterType === '' || type.includes(filterType);
+            const deviceTypeMatch = filterDeviceType === '' || deviceType === filterDeviceType;
+            const isActiveMatch = filterIsActive === '' || 
+                            (filterIsActive === 'true' && isActive) || 
+                            (filterIsActive === 'false' && !isActive);
+    
+            row.style.display = nameMatch && typeMatch && deviceTypeMatch && isActiveMatch ? '' : 'none';
+        });
+    }
+
+    // 确保DOM加载完成后初始化
+    if (document.readyState !== 'loading') {
+        filterParameters();
+    } else {
+        document.addEventListener('DOMContentLoaded', function() {
+            filterParameters();
+        });
+    }
+
+    function updateValueInput(codeSelect, valueInput) {
+        const selectedType = codeSelect.value;
+        const valueContainer = valueInput.parentElement;
+        
+        // 移除旧的复选框容器（如果存在）
+        const oldCheckbox = valueContainer.querySelector('.custom-checkbox');
+        if (oldCheckbox) {
+            oldCheckbox.remove();
+        }
+        
+        switch(selectedType) {
+            case 'int':
+                valueInput.type = 'number';
+                valueInput.step = '1';
+                valueInput.pattern = '^-?\\d+$';
+                valueInput.style.display = '';
+                break;
+            case 'float':
+                valueInput.type = 'number';
+                valueInput.step = 'any';
+                valueInput.style.display = '';
+                break;
+            case 'bool':
+                valueInput.style.display = 'none';
+                // 创建自定义复选框
+                const checkboxContainer = document.createElement('div');
+                checkboxContainer.className = 'custom-checkbox';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.name = valueInput.name;
+                checkbox.checked = valueInput.value === 'true';
+                
+                const checkmark = document.createElement('span');
+                checkmark.className = 'checkmark';
+                
+                checkboxContainer.appendChild(checkbox);
+                checkboxContainer.appendChild(checkmark);
+                valueContainer.appendChild(checkboxContainer);
+                break;
+            case 'str':
+            default:
+                valueInput.type = 'text';
+                valueInput.removeAttribute('step');
+                valueInput.removeAttribute('pattern');
+                valueInput.style.display = '';
+                break;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // 监听设备类型变更
+        const deviceTypeSelect = document.getElementById('device_type');
+        if (deviceTypeSelect) {
+            deviceTypeSelect.addEventListener('change', function() {
+                document.getElementById('device_id').value = '';
+            });
+        }
+
+        const addCodeSelect = document.querySelector('#parameterForm select[name="code"]');
+        const addValueInput = document.querySelector('#parameterForm input[name="value"]');
+        if (addCodeSelect && addValueInput) {
+            addCodeSelect.addEventListener('change', function() {
+                updateValueInput(this, addValueInput);
+            });
+        }
+
+        const editCodeSelect = document.getElementById('code');
+        const editValueInput = document.getElementById('value');
+        if (editCodeSelect && editValueInput) {
+            editCodeSelect.addEventListener('change', function() {
+                updateValueInput(this, editValueInput);
+            });
+        }
+        
+        // 批量删除功能
+        const selectAllCheckbox = document.getElementById('selectAll');
+        const parameterCheckboxes = document.querySelectorAll('.parameter-checkbox');
+        const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+        
+        // 全选/取消全选
+        selectAllCheckbox.addEventListener('change', function() {
+            const isChecked = this.checked;
+            parameterCheckboxes.forEach(checkbox => {
+                checkbox.checked = isChecked;
+            });
+            updateBatchDeleteButton();
+        });
+        
+        // 单个复选框变化时更新全选状态和批量删除按钮
+        parameterCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                updateSelectAllCheckbox();
+                updateBatchDeleteButton();
+            });
+        });
+        
+        // 更新全选复选框状态
+        function updateSelectAllCheckbox() {
+            const checkedCount = document.querySelectorAll('.parameter-checkbox:checked').length;
+            selectAllCheckbox.checked = checkedCount === parameterCheckboxes.length && parameterCheckboxes.length > 0;
+        }
+        
+        // 更新批量删除按钮显示状态
+        function updateBatchDeleteButton() {
+            const checkedCount = document.querySelectorAll('.parameter-checkbox:checked').length;
+            batchDeleteBtn.style.display = checkedCount > 0 ? 'inline-block' : 'none';
+        }
+        
+        // 批量删除按钮点击事件
+        batchDeleteBtn.addEventListener('click', function() {
+            const selectedIds = [];
+            document.querySelectorAll('.parameter-checkbox:checked').forEach(checkbox => {
+                selectedIds.push(checkbox.dataset.parameterId);
+            });
+            
+            if (selectedIds.length === 0) {
+                alert('请至少选择一个参数');
+                return;
+            }
+            
+            if (confirm(`确定要删除选中的 ${selectedIds.length} 个参数吗？`)) {
+                // 创建表单数据
+                const formData = new FormData();
+                formData.append('parameter_ids', JSON.stringify(selectedIds));
+                
+                // 添加CSRF令牌
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                
+                // 发送AJAX请求
+                fetch('{% url "batch_delete_parameters" %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert(data.message);
+                        // 刷新页面
+                        window.location.reload();
+                    } else {
+                        alert('删除失败: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('批量删除请求出错:', error);
+                    alert('删除请求出错，请查看控制台');
+                });
+            }
+        });
+    });
+
+    function showParameterEditModal(button) {
+        const parameterId = button.dataset.parameterId;
+        const modal = document.getElementById('parameterEditModal');
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        
+        fetch("{% url 'get_param_data' 0 %}".replace('0', parameterId))
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('name').value = data.name;
+                const codeSelect = document.getElementById('code');
+                const valueInput = document.getElementById('value');
+                codeSelect.value = data.code;
+                updateValueInput(codeSelect, valueInput);
+                valueInput.value = data.value;
+                document.getElementById('unit').value = data.unit;
+                document.getElementById('description').value = data.description;
+                document.getElementById('is_active').checked = data.is_active;
+                document.getElementById('device_id').value = data.device_id;
+                document.getElementById('device_type').value = data.device_type;
+                
+                const form = document.getElementById('editForm');
+                form.action = "{% url 'calib_edit_parameter' 0 %}".replace('0', parameterId);
+            })
+            .catch(error => {
+                console.error('请求出错:', error);
+            });
+    }
+    
+    function closeParameterEditModal() {
+        const modal = document.getElementById('parameterEditModal');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+    
+    function del(button) {
+        const deleteUrl = button.dataset.url;
+        if (confirm('你确定要删除这个参数吗？')) {
+            window.location.href = deleteUrl;
+        }
+    }
+    
+    function exportParameters(format) {
+        const headers = ['参数名称', '类型', '单位', '描述', '是否启用', '设备类型', '车辆编号'];
+        const rows = [];
+        
+        document.querySelectorAll('.parameter-table tbody tr').forEach(row => {
+            const cells = row.querySelectorAll('td');
+            const rowData = {
+                name: cells[1].textContent.trim(),
+                type: cells[2].textContent.trim(),
+                unit: cells[3].textContent.trim(),
+                description: cells[4].textContent.trim(),
+                is_active: cells[5].querySelector('input').checked ? '是' : '否',
+                device_type: cells[6].textContent.trim(),
+                device_id: cells[7].textContent.trim()
+            };
+            rows.push(rowData);
+        });
+        
+        if (format === 'csv') {
+             let csvContent = '\uFEFF' + headers.join(',') + '\n';
+             rows.forEach(row => {
+                 csvContent += Object.values(row).map(value => `"${value}"`).join(',') + '\n';
+             });
+             
+             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+             const url = URL.createObjectURL(blob);
+             const link = document.createElement('a');
+             link.setAttribute('href', url);
+             link.setAttribute('download', `参数列表_${new Date().toISOString().slice(0, 10)}.csv`);
+             link.click();
+        } else if (format === 'json') {
+            const jsonContent = JSON.stringify(rows, null, 2);
+            const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `参数列表_${new Date().toISOString().slice(0, 10)}.json`);
+            link.click();
+        }
+    }
+
+    // 新增参数值校验功能
+    function validateParameterValue(parameterId, value) {
+        fetch('/validate_parameter_value/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: `parameter_id=${parameterId}&value=${encodeURIComponent(value)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            const resultElement = document.getElementById(`validationResult_${parameterId}`);
+            if (data.status === 'success') {
+                resultElement.textContent = '参数值合法';
+                resultElement.style.color = 'green';
+            } else {
+                resultElement.textContent = data.message;
+                resultElement.style.color = 'red';
+            }
+        })
+        .catch(error => {
+            console.error('校验失败:', error);
+            const resultElement = document.getElementById(`validationResult_${parameterId}`);
+            resultElement.textContent = '校验失败，请稍后重试';
+            resultElement.style.color = 'red';
+        });
+    }
+
+    // 监听参数值输入框的变化
+    document.addEventListener('DOMContentLoaded', function() {
+        const valueInputs = document.querySelectorAll('.parameter-value-input');
+        valueInputs.forEach(input => {
+            input.addEventListener('input', function() {
+                const parameterId = input.getAttribute('data-parameter-id');
+                const value = input.value;
+                validateParameterValue(parameterId, value);
+            });
+        });
+    });
+
+    // WebSocket连接管理
+    class DeviceStatusWebSocket {
+        constructor() {
+            this.ws = null;
+            this.reconnectAttempts = 0;
+            this.maxReconnectAttempts = 5;
+            this.reconnectInterval = 5000;
+            this.connect();
+        }
+
+        connect() {
+            try {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws/device-status/`;
+                
+                this.ws = new WebSocket(wsUrl);
+                
+                this.ws.onopen = (event) => {
+                    console.log('WebSocket连接已建立');
+                    this.reconnectAttempts = 0;
+                    this.requestDeviceStatus();
+                    this.showNotification('实时监控已连接', 'success');
+                };
+                
+                this.ws.onmessage = (event) => {
+                    this.handleMessage(JSON.parse(event.data));
+                };
+                
+                this.ws.onclose = (event) => {
+                    console.log('WebSocket连接已关闭');
+                    this.attemptReconnect();
+                };
+                
+                this.ws.onerror = (error) => {
+                    console.error('WebSocket错误:', error);
+                };
+            } catch (error) {
+                console.error('WebSocket连接失败:', error);
+                this.attemptReconnect();
+            }
+        }
+
+        attemptReconnect() {
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                this.reconnectAttempts++;
+                setTimeout(() => {
+                    console.log(`尝试重连... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+                    this.connect();
+                }, this.reconnectInterval);
+            } else {
+                this.showNotification('实时监控连接失败，请刷新页面重试', 'error');
+            }
+        }
+
+        handleMessage(data) {
+            switch (data.type) {
+                case 'device_status_update':
+                    this.updateDeviceStatus(data.device_id, data.status);
+                    break;
+                case 'device_notification':
+                    this.handleDeviceNotification(data.notification);
+                    break;
+                case 'all_device_status':
+                    this.updateAllDeviceStatus(data.devices);
+                    break;
+            }
+        }
+
+        requestDeviceStatus() {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({
+                    'type': 'get_device_status'
+                }));
+            }
+        }
+
+        updateDeviceStatus(deviceId, status) {
+            // 更新页面上的设备状态显示
+            const statusElements = document.querySelectorAll(`[data-device-id="${deviceId}"]`);
+            statusElements.forEach(element => {
+                const statusIndicator = element.querySelector('.device-status-indicator');
+                const statusText = element.querySelector('.device-status-text');
+                
+                if (statusIndicator && statusText) {
+                    statusIndicator.className = `device-status-indicator ${status.is_connected ? 'online' : 'offline'}`;
+                    statusText.textContent = status.status;
+                    
+                    // 更新最后检查时间
+                    const lastCheckElement = element.querySelector('.last-check-time');
+                    if (lastCheckElement) {
+                        lastCheckElement.textContent = new Date(status.last_checked_time * 1000).toLocaleString();
+                    }
+                }
+            });
+
+            // 如果设备离线，禁用相关参数的编辑功能
+            if (!status.is_connected) {
+                this.disableParameterEditing(deviceId);
+            } else {
+                this.enableParameterEditing(deviceId);
+            }
+        }
+
+        updateAllDeviceStatus(devices) {
+            Object.keys(devices).forEach(deviceId => {
+                this.updateDeviceStatus(deviceId, devices[deviceId]);
+            });
+        }
+
+        handleDeviceNotification(notification) {
+            if (notification.type === 'device_offline') {
+                this.showNotification(notification.message, 'warning');
+                
+                // 显示浏览器通知（如果用户允许）
+                if (Notification.permission === 'granted') {
+                    new Notification('设备离线提醒', {
+                        body: notification.message,
+                        icon: '/static/images/warning-icon.png'
+                    });
+                }
+            }
+        }
+
+        showNotification(message, type = 'info') {
+            // 创建通知元素
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.innerHTML = `
+                <span class="notification-message">${message}</span>
+                <button class="notification-close" onclick="this.parentElement.remove()">×</button>
+            `;
+            
+            // 添加到页面
+            const container = document.getElementById('notification-container') || this.createNotificationContainer();
+            container.appendChild(notification);
+            
+            // 自动移除
+            setTimeout(() => {
+                if (notification.parentElement) {
+                    notification.remove();
+                }
+            }, 5000);
+        }
+
+        createNotificationContainer() {
+            const container = document.createElement('div');
+            container.id = 'notification-container';
+            container.className = 'notification-container';
+            document.body.appendChild(container);
+            return container;
+        }
+
+        disableParameterEditing(deviceId) {
+            const parameterRows = document.querySelectorAll(`[data-device-id="${deviceId}"] .parameter-row`);
+            parameterRows.forEach(row => {
+                const editButton = row.querySelector('.edit-btn');
+                const deleteButton = row.querySelector('.delete-btn');
+                
+                if (editButton) {
+                    editButton.disabled = true;
+                    editButton.title = '设备离线，无法编辑参数';
+                }
+                if (deleteButton) {
+                    deleteButton.disabled = true;
+                    deleteButton.title = '设备离线，无法删除参数';
+                }
+            });
+        }
+
+        enableParameterEditing(deviceId) {
+            const parameterRows = document.querySelectorAll(`[data-device-id="${deviceId}"] .parameter-row`);
+            parameterRows.forEach(row => {
+                const editButton = row.querySelector('.edit-btn');
+                const deleteButton = row.querySelector('.delete-btn');
+                
+                if (editButton) {
+                    editButton.disabled = false;
+                    editButton.title = '编辑参数';
+                }
+                if (deleteButton) {
+                    deleteButton.disabled = false;
+                    deleteButton.title = '删除参数';
+                }
+            });
+        }
+    }
+
+    // 参数修改确认对话框
+    function showParameterEditConfirmation(parameterId, parameterName, oldValue, newValue) {
+        return new Promise((resolve) => {
+            const modal = document.createElement('div');
+            modal.className = 'confirmation-modal';
+            modal.innerHTML = `
+                <div class="confirmation-content">
+                    <h3>参数修改确认</h3>
+                    <div class="parameter-change-info">
+                        <p><strong>参数名称:</strong> ${parameterName}</p>
+                        <p><strong>当前值:</strong> <span class="old-value">${oldValue}</span></p>
+                        <p><strong>新值:</strong> <span class="new-value">${newValue}</span></p>
+                    </div>
+                    <div class="confirmation-warning">
+                        <p>⚠️ 修改此参数可能会影响设备运行，请确认操作</p>
+                    </div>
+                    <div class="confirmation-buttons">
+                        <button class="btn btn-confirm" onclick="confirmEdit()">确认修改</button>
+                        <button class="btn btn-cancel" onclick="cancelEdit()">取消</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            window.confirmEdit = () => {
+                modal.remove();
+                resolve(true);
+            };
+            
+            window.cancelEdit = () => {
+                modal.remove();
+                resolve(false);
+            };
+        });
+    }
+
+    // 增强的参数值校验
+    async function validateParameterValue(parameterId, value, deviceId) {
+        try {
+            const formData = new FormData();
+            formData.append('parameter_id', parameterId);
+            formData.append('value', value);
+            formData.append('device_id', deviceId);
+            
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            const response = await fetch('{% url "validate_parameter_value" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                },
+                body: formData
+            });
+            
+            const result = await response.json();
+            return result;
+        } catch (error) {
+            console.error('参数校验请求失败:', error);
+            return {
+                status: 'error',
+                message: '参数校验请求失败'
+            };
+        }
+    }
+
+    // 页面初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        // 初始化WebSocket连接
+        window.deviceStatusWS = new DeviceStatusWebSocket();
+        
+        // 请求浏览器通知权限
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+        
+        // 增强参数编辑表单提交
+        const parameterForm = document.getElementById('parameterEditForm');
+        if (parameterForm) {
+            parameterForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const parameterId = this.querySelector('[name="parameter_id"]').value;
+                const parameterName = this.querySelector('[name="name"]').value;
+                const oldValue = this.querySelector('[name="original_value"]').value;
+                const newValue = this.querySelector('[name="value"]').value;
+                const deviceId = this.querySelector('[name="device_id"]').value;
+                
+                // 参数值校验
+                const validationResult = await validateParameterValue(parameterId, newValue, deviceId);
+                
+                if (validationResult.status !== 'success') {
+                    alert('参数校验失败: ' + validationResult.message);
+                    return;
+                }
+                
+                // 显示确认对话框
+                const confirmed = await showParameterEditConfirmation(parameterId, parameterName, oldValue, newValue);
+                
+                if (confirmed) {
+                    // 提交表单
+                    this.submit();
+                }
+            });
+        }
+        
+        // ... existing code ...
+    });
+
+    // CSS样式
+    const style = document.createElement('style');
+    style.textContent = `
+        .device-status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .device-status-indicator.online {
+            background-color: #28a745;
+            box-shadow: 0 0 5px rgba(40, 167, 69, 0.5);
+        }
+        
+        .device-status-indicator.offline {
+            background-color: #dc3545;
+            box-shadow: 0 0 5px rgba(220, 53, 69, 0.5);
+        }
+        
+        .notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+        }
+        
+        .notification {
+            background: white;
+            border-left: 4px solid #007bff;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 10px;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .notification-success {
+            border-left-color: #28a745;
+        }
+        
+        .notification-warning {
+            border-left-color: #ffc107;
+        }
+        
+        .notification-error {
+            border-left-color: #dc3545;
+        }
+        
+        .notification-close {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 0;
+            margin-left: 10px;
+        }
+        
+        .confirmation-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+        
+        .confirmation-content {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+        }
+        
+        .parameter-change-info {
+            background: #f8f9fa;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .old-value {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        
+        .new-value {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .confirmation-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 15px 0;
+            color: #856404;
+        }
+        
+        .confirmation-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+        
+        .btn-confirm {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .btn-cancel {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+    `;
+    document.head.appendChild(style);
+</script>
+
+<div class="parameter-management">
+    <div class="parameter-header">
+        <h2 class="parameter-title">参数标定</h2>
+        <div class="parameter-actions">
+            <button class="modal-btn delete" id="batchDeleteBtn" style="display:none; margin-right: 10px;">批量删除</button>
+            <button class="modal-btn export" onclick="exportParameters('csv')" style="margin-right: 10px;">导出CSV</button>
+            <button class="modal-btn export" onclick="exportParameters('json')" style="margin-right: 10px;">导出JSON</button>
+            <button class="modal-btn submit" onclick="showParameterModal()">添加参数</button>
+            <a href="{% url 'rcp_regMain' %}" class="modal-btn view" style="margin-right: 10px;">查看标定历史</a> <!-- 新增标定历史链接 -->
+        </div>
+    </div>
+
+    <!-- 搜索和筛选区域 -->
+    <div class="search-filter-section">
+        <div class="search-group">
+            <input type="text" id="searchName" placeholder="搜索参数名称..." oninput="filterParameters()">
+        </div>
+        <div class="filter-group">
+            <select id="filterType" onchange="filterParameters()">
+                <option value="">所有类型</option>
+                <option value="int">整数 (int)</option>
+                <option value="float">浮点数 (float)</option>
+                <option value="str">字符串 (str)</option>
+                <option value="bool">布尔值 (bool)</option>
+            </select>
+            <select id="filterDeviceType" onchange="filterParameters()">
+                <option value="">所有设备类型</option>
+                <option value="清扫车">清扫车</option>
+                <option value="清洁船">清洁船</option>
+                <option value="无人机">无人机</option>
+            </select>
+            <select id="filterIsActive" onchange="filterParameters()">
+                <option value="">全部状态</option>
+                <option value="true">已启用</option>
+                <option value="false">未启用</option>
+            </select>
+        </div>
+    </div>
+    
+    <table class="parameter-table">
+        <thead>
+            <tr>
+                <th width="40px">
+                    <div class="custom-checkbox">
+                        <input type="checkbox" id="selectAll">
+                        <span class="checkmark"></span>
+                    </div>
+                </th>
+                <th>参数名称</th>
+                <th>类型</th>
+                <th>单位</th>
+                <th>描述</th>
+                <th>是否启用</th>
+                <th>设备类型</th>
+                <th>车辆编号</th>
+                <th>操作</th>
+                <th>创建时间</th>
+                <!-- 删除更新时间和用户名表头 -->
+            </tr>
+        </thead>
+        <tbody>
+            {% for parameter in parameters %}
+            <tr>
+                <td>
+                    <div class="custom-checkbox">
+                        <input type="checkbox" class="parameter-checkbox" data-parameter-id="{{ parameter.id }}">
+                        <span class="checkmark"></span>
+                    </div>
+                </td>
+                <td>{{ parameter.name }}</td>
+                <td><code>{{ parameter.code }}</code></td>
+                <td>{{ parameter.unit|default:'' }}</td>
+                <td>{{ parameter.description|default:'' }}</td>
+                <td>
+                    <div class="custom-checkbox">
+                        <input type="checkbox" {% if parameter.is_active %}checked{% endif %} disabled>
+                        <span class="checkmark"></span>
+                    </div>
+                </td>
+                <td>{{ parameter.get_device_type_display }}</td>
+                <td>{{ parameter.device_id|default:'' }}</td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="edit-parameter-btn" data-parameter-id="{{ parameter.id }}" onclick="showParameterEditModal(this)">修改</button>
+                        <button class="del-parameter-btn" data-url="{% url 'delete_parameter' parameter.id %}" onclick="del(this)">删除</button>
+                    </div>
+                </td>
+                <td>{{ parameter.created_at|default:'' }}</td>
+                <!-- 删除更新时间和用户名列 -->
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- 添加参数模态框 -->
+<div class="modal-overlay" id="parameterModal">
+    <div class="modal-container">
+        <form id="parameterForm" class="modal-form" method="post">
+            {% csrf_token %}
+            <div class="form-group">
+                <label>参数名称</label>
+                <input type="text" name="name" required>
+                <div class="error-msg"></div>
+            </div>
+
+            <div class="form-group">
+                <label>类型</label>
+                <select name="code" required>
+                    <option value="">-- 请选择 --</option>
+                    <option value="int">整数 (int)</option>
+                    <option value="float">浮点数 (float)</option>
+                    <option value="str">字符串 (str)</option>
+                    <option value="bool">布尔值 (bool)</option>
+                </select>
+                <div class="error-msg"></div>
+            </div>
+
+            <div class="form-group">
+                <label>参数值</label>
+                <input type="text" name="value" required>
+                <div class="error-msg"></div>
+            </div>
+
+            <div class="form-group">
+                <label>单位</label>
+                <input type="text" name="unit">
+            </div>
+
+            <div class="form-group">
+                <label>描述</label>
+                <textarea name="description" rows="3"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>是否启用</label>
+                <div class="custom-checkbox">
+                    <input type="checkbox" name="is_active" checked>
+                    <span class="checkmark"></span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>设备类型</label>
+                <select name="device_type" required>
+                    <option value="">-- 请选择 --</option>
+                    <option value="vehicle">清扫车</option>
+                    <option value="ship">清洁船</option>
+                    <option value="uav">无人机</option>
+                </select>
+
+                <label>车辆编号</label>
+                <select name="device_id" required>
+                    {% for vehicle in vehicles %}
+                    <option value={{ vehicle.vehicle_number }}>{{ vehicle.vehicle_number }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="modal-btn cancel" onclick="closeParameterModal()">取消</button>
+                <button type="submit" class="modal-btn submit">保存参数</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 编辑参数模态框 -->
+<div class="modal-overlay" id="parameterEditModal">
+    <div class="modal-container">
+        <form id="editForm" class="modal-form" method="post" action="{% url 'calib_edit_parameter' 0 %}">
+            {% csrf_token %}
+            <div class="form-group">
+                <label>参数名称</label>
+                <input type="text" id="name" name="name" required>
+                <div class="error-msg"></div>
+            </div>
+
+            <div class="form-group">
+                <label>类型</label>
+                <select id="code" name="code" required>
+                    <option value="">-- 请选择 --</option>
+                    <option value="int">整数 (int)</option>
+                    <option value="float">浮点数 (float)</option>
+                    <option value="str">字符串 (str)</option>
+                    <option value="bool">布尔值 (bool)</option>
+                </select>
+                <div class="error-msg"></div>
+            </div>
+
+            <div class="form-group">
+                <label>参数值</label>
+                <input type="text" id="value" name="value" required>
+                <div class="error-msg"></div>
+            </div>
+
+            <div class="form-group">
+                <label>单位</label>
+                <input type="text" id="unit" name="unit">
+            </div>
+
+            <div class="form-group">
+                <label>描述</label>
+                <textarea id="description" name="description" rows="3"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>是否启用</label>
+                <div class="custom-checkbox">
+                    <input type="checkbox" id="is_active" name="is_active">
+                    <span class="checkmark"></span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>设备类型</label>
+                <select id="device_type" name="device_type" required>
+                    <option value="">-- 请选择 --</option>
+                    <option value="vehicle">清扫车</option>
+                    <option value="ship">清洁船</option>
+                    <option value="uav">无人机</option>
+                </select>
+
+                <label>车辆编号</label>
+                <input type="number" id="device_id" name="device_id" required>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="modal-btn cancel" onclick="closeParameterEditModal()">取消</button>
+                <button type="submit" class="modal-btn submit">保存参数</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

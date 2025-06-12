@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT WebSocket Monitor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 flex justify-center items-center h-screen">
+    <div class="bg-white p-8 rounded shadow-md w-full max-w-md">
+        <h1 class="text-2xl font-bold mb-4">MQTT WebSocket Monitor</h1>
+        <input type="text" id="topicInput" placeholder="Enter topic to subscribe" class="border border-gray-300 p-2 w-full mb-4 rounded">
+        <button id="connectButton" class="bg-blue-500 text-white p-2 rounded mr-2 hover:bg-blue-600">Connect</button>
+        <button id="disconnectButton" class="bg-red-500 text-white p-2 rounded hover:bg-red-600" disabled>Disconnect</button>
+        <div id="messageList" class="mt-4">
+            <h2 class="text-lg font-bold mb-2">Received Messages:</h2>
+            <ul id="messages" class="list-disc list-inside"></ul>
+        </div>
+    </div>
+
+    <script>
+        const topicInput = document.getElementById('topicInput');
+        const connectButton = document.getElementById('connectButton');
+        const disconnectButton = document.getElementById('disconnectButton');
+        const messages = document.getElementById('messages');
+
+        let client;
+
+        connectButton.addEventListener('click', () => {
+            const topic = topicInput.value;
+            if (topic) {
+                try {
+                    client = new Paho.MQTT.Client('broker.emqx.io', 8083, 'clientId-' + new Date().getTime());
+
+                    client.onConnectionLost = onConnectionLost;
+                    client.onMessageArrived = onMessageArrived;
+
+                    const connectOptions = {
+                        useSSL: false,
+                        onSuccess: () => {
+                            console.log('Connected to MQTT broker');
+                            client.subscribe(topic);
+                            connectButton.disabled = true;
+                            disconnectButton.disabled = false;
+                        },
+                        onFailure: (err) => {
+                            console.error('Connection failed:', err.errorCode, err.errorMessage);
+                        }
+                    };
+
+                    client.connect(connectOptions);
+                } catch (error) {
+                    console.error('Error creating MQTT client:', error);
+                }
+            }
+        });
+
+        disconnectButton.addEventListener('click', () => {
+            if (client) {
+                try {
+                    client.disconnect();
+                    connectButton.disabled = false;
+                    disconnectButton.disabled = true;
+                } catch (error) {
+                    console.error('Error disconnecting from MQTT client:', error);
+                }
+            }
+        });
+
+        function onConnectionLost(responseObject) {
+            if (responseObject.errorCode !== 0) {
+                console.log('Connection lost:', responseObject.errorMessage);
+            }
+        }
+
+        function onMessageArrived(message) {
+            const listItem = document.createElement('li');
+            listItem.textContent = `Topic: ${message.destinationName}, Message: ${message.payloadString}`;
+            messages.appendChild(listItem);
+        }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.js"></script>
+</body>
+
+</html>

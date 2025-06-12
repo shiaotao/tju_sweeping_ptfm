@@ -1,0 +1,16 @@
+# 忽略IDE配置文件
+.vscode/
+
+# 忽略字节码缓存文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 忽略所有.log文件
+*.log
+
+# 保护带有明文的文件
+# config/settings.py
+
+sweeping/static/js/vue.debug.js

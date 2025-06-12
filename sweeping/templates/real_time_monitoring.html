@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>实时监控</h2>
+<div id="map" style="height: 500px;"></div>
+<script src="https://webapi.amap.com/maps?v=1.4.15&key=your_amap_key"></script>
+<script>
+    // 将后台传递的 JSON 字符串解析为 JavaScript 对象
+    let vehicleData = JSON.parse('{{ vehicle_data|safe }}');
+
+    // 初始化高德地图
+    var map = new AMap.Map('map', {
+        zoom: 14,
+        center: [116.397428, 39.90923]
+    });
+
+    // 遍历车辆数据并添加标记
+    vehicleData.forEach(function(vehicle) {
+        var marker = new AMap.Marker({
+            position: [vehicle.longitude, vehicle.latitude],
+            title: vehicle.vehicle_number,
+            content: "<div>" + vehicle.vehicle_number + "</div><div>电量: " + vehicle.battery + "%</div>"
+        });
+        map.add(marker);
+    });
+</script>
+{% endblock %}

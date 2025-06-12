@@ -1,0 +1,36 @@
+{% extends 'main.html' %}
+
+{% block content %}
+<h2>首页</h2>
+<p>欢迎来到无人清扫车远程监控及调度平台！</p>
+<!-- 设备连接状态显示区域 -->
+<div class="device-status-container" style="margin-top: 240px;">
+    <h3>设备连接状态</h3>
+    <ul id="deviceStatusList"></ul>
+</div>
+
+<script>
+    // 定时更新设备连接状态
+        function updateDeviceStatus() {
+            fetch('/device_connection_status/')
+                .then(response => response.json())
+                .then(data => {
+                    const statusList = document.getElementById('deviceStatusList');
+                    statusList.innerHTML = ''; // 清空原有内容
+                    for (const [deviceId, statusInfo] of Object.entries(data)) {
+                        const li = document.createElement('li');
+                        li.textContent = `设备ID: ${deviceId}, 状态: ${statusInfo.status}, 最后检查时间: ${new Date(statusInfo.last_checked_time * 1000).toLocaleString()}`;
+                        statusList.appendChild(li);
+                    }
+                })
+                .catch(error => console.error('Error fetching device status:', error));
+        }
+
+        // 每5秒更新一次设备连接状态
+        setInterval(updateDeviceStatus, 5000);
+
+        // 页面加载时首次更新设备连接状态
+        window.onload = updateDeviceStatus;
+    </script>
+</script>
+{% endblock %}

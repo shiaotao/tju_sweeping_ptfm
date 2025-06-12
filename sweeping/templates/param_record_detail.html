@@ -1,0 +1,197 @@
+
+{% extends 'main.html' %}
+
+{% block content %}
+
+<script>
+    function showDetailViewModal(paramId) {
+        // 延迟执行，确保弹窗完全渲染
+        setTimeout(() => {
+            // 通过 AJAX 请求获取参数数据
+            fetch("{% url 'get_parameter_data' 0 %}".replace('0', paramId))
+                .then(response => response.json())
+                .then(data => {
+                    // 安全设置值的函数
+                    function safeSetValue(id, value) {
+                        const element = document.getElementById(id);
+                        if (element) {
+                            element.value = value || '';
+                            // 确保时间字段有正确的样式
+                            if (id === 'param_Record_Time' || id === 'param_Update_Time') {
+                                element.style.backgroundColor = '#ffffff';
+                                element.style.color = '#333333';
+                                element.style.border = '1px solid #dcdfe6';
+                            }
+                        } else {
+                            console.warn(`元素 ${id} 不存在`);
+                        }
+                    }
+                    
+                    safeSetValue('param_Name', data.param_Name);
+                    safeSetValue('param_DataType', data.param_DataType_display || data.param_DataType);
+                    safeSetValue('param_Nst', data.param_Nst_display || data.param_Nst);
+                    safeSetValue('param_Value', data.param_Value);
+                    safeSetValue('param_ValUnit', data.param_ValUnit);
+                    safeSetValue('param_OrgID', data.param_OrgID);
+                    safeSetValue('param_PrevValue', data.param_PrevValue);
+                    safeSetValue('param_ChaID', data.param_ChaID);
+                    safeSetValue('param_NextValue', data.param_NextValue);
+                    safeSetValue('param_State', data.param_State_display || data.param_State);
+                    safeSetValue('param_Operator', data.param_Operator);
+                    safeSetValue('param_DeviceID', data.param_DeviceID);
+                    safeSetValue('param_Device_Type', data.param_Device_Type_display || data.param_Device_Type);
+                    safeSetValue('param_Users_Remark', data.param_Users_Remark);
+                    safeSetValue('param_Record_Time', data.param_Record_Time || '2025-01-01 12:00:00');
+                    safeSetValue('param_Update_Time', data.param_Update_Time || '2025-01-02 14:30:00');
+                    safeSetValue('param_Is_Active', data.param_Is_Active ? '是' : '否');
+                    
+                    const form = document.getElementById('detailViewForm');
+                    if (form) {
+                        form.action = "{% url 'rcp_regDetail' 0 %}".replace('0', paramId);
+                    }
+                })
+                .catch(error => {
+                    console.error('请求出错:', error);
+                });
+        }, 9);
+    }
+
+    function clickBtn2Url(btn) {
+        location.href = btn.getAttribute('data-url');
+    }
+
+    function click2submit() {
+        const remark = document.getElementById('param_Users_Remark').value;
+        const form = document.getElementById('paramDetailViewForm');
+        const param_id = form.dataset.prmId;
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        if (!remark) {
+            alert('备注不能为空');
+            return;
+        }
+        fetch("{% url 'rcp_updateRmk' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrftoken,
+            },
+            body: JSON.stringify({
+                prm_id: param_id,
+                param_Users_Remark: remark
+            })
+        }).then(resp => resp.json())
+            .then(data => {
+                if (data.success) {
+                    alert("备注保存成功！");
+                } else {
+                    alert("保存失败: " + (data.error || "未知错误"));
+                }
+        }).catch(err => {
+            alert("网络错误: " + err);
+        });
+    }
+</script>
+
+<div class="prm-header">
+    <h2 class="prm-title">历史记录详情</h2>
+</div>
+<form id="paramDetailViewForm" class="modal-form" style="padding: 0;" data-prm-id="{{ prm_id }}">
+    <!-- 表单元素 -->
+    {% csrf_token %}
+    <div class="prm-cols">
+        <div class="left-col">
+            <div class="prm-form">
+                <label>参数名</label>
+                <input type="text" id="param_Name" readonly>
+                <div class="error-msg"></div>
+            </div>
+
+            <div class="form-row">
+                <div class="prm-form">
+                    <label>数据类型</label>
+                    <input type="text" id="param_DataType" readonly>
+                    <div class="error-msg"></div>
+                </div>
+                
+                <div class="prm-form">
+                    <label>进制</label>
+                    <input type="text" id="param_Nst" readonly>
+                    <div class="error-msg"></div>
+                </div>
+            </div>
+        
+            <div class="form-row">
+                <div class="prm-form">
+                    <label>参数值</label>
+                    <input type="text" id="param_Value" readonly>
+                </div>
+                
+                <div class="prm-form">
+                    <label>单位</label>
+                    <input type="text" id="param_ValUnit" readonly>
+                </div>
+                <div class="error-msg"></div>
+            </div>
+
+            <div class="form-row">
+                <div class="prm-form">
+                    <label>创建时间</label>
+                    <input type="text" id="param_Record_Time" readonly>
+                    <div class="error-msg"></div>
+                </div>
+
+                <div class="prm-form">
+                    <label>更新时间</label>
+                    <input type="text" id="param_Update_Time" readonly>
+                    <div class="error-msg"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="right-col">
+            <div class="prm-form">
+                <label>参数状态</label>
+                <input type="text" id="param_State" readonly>
+                <div class="error-msg"></div>
+            </div>
+
+            <div class="prm-form">
+                <label>操作人</label>
+                <input type="text" id="param_Operator" readonly>
+                <div class="error-msg"></div>
+            </div>
+
+            <div class="form-row">
+                <div class="prm-form">
+                    <label>上一值</label>
+                    <input type="text" id="param_PrevValue" readonly>
+                </div>
+                
+                <div class="prm-form">
+                    <label>下一值</label>
+                    <input type="text" id="param_NextValue" readonly>
+                </div>
+                <div class="error-msg"></div>
+            </div>
+        
+            <div class="prm-form">
+                <label>用户备注</label>
+                <input type="text" id="param_Users_Remark" name="param_Users_Remark" value="">
+                <div class="error-msg"></div>
+            </div>
+            
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="button" class="modal-btn cancel" onclick="clickBtn2Url(this)" data-url="{% url 'rcp_regMain' %}">返回</button>
+        <button type="submit" class="modal-btn submit" onclick="click2submit()">保存备注</button>
+    </div>
+</form>
+
+<script>
+    const paramID = document.getElementById('paramDetailViewForm').dataset.prmId;
+    showDetailViewModal(paramID)
+</script>
+
+{% endblock %}

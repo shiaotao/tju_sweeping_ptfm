@@ -1,0 +1,208 @@
+
+
+    {% extends 'main.html' %}
+
+    {% block content %}
+    <script>
+        function showVehicleModal() {
+            const modal = document.getElementById('vehicleModal');
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closeVehicleModal() {
+            const modal = document.getElementById('vehicleModal');
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+        function showVehicleEditModal(button) {
+            const vehicleId = button.dataset.vehicleId;
+            const modal = document.getElementById('vehicleEditModal');
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            // 通过 AJAX 请求获取车辆数据
+            fetch("{% url 'get_vehicle_data' 0 %}".replace('0', vehicleId))
+               .then(response => response.json())
+               .then(data => {
+                
+                    document.getElementById('vehicle_number').value = data.vehicle_number;
+                    document.getElementById('vin_code').value = data.vin_code;
+                    document.getElementById('license_plate').value = data.license_plate;
+                    document.getElementById('manufacturer').value = data.manufacturer;
+                    document.getElementById('brand').value = data.brand;
+                    document.getElementById('operation_date').value = data.operation_date;
+                    const form = document.getElementById('editForm');
+                    form.action = "{% url 'edit_vehicle' 0 %}".replace('0', vehicleId);
+                })
+               .catch(error => {
+                    console.error('请求出错:', error);
+                });
+        
+        }
+        
+        function closeVehicleEditModal() {
+            const modal = document.getElementById('vehicleEditModal');
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+        function del(button) {
+            const deleteUrl = button.dataset.url;
+            if (confirm('你确定要删除这辆车吗？')) {
+                window.location.href = deleteUrl;
+            }
+        }
+        </script>
+    <div class="vehicle-management">
+        <div class="vehicle-header">
+            <h2 class="vehicle-title">车辆管理</h2>
+            <button  class="modal-btn submit" onclick="showVehicleModal()">添加车辆</button>
+        </div>
+        
+        <table class="vehicle-table">
+            <thead>
+                <tr>
+                    <th>车辆编号</th>
+                    <th>VIN码</th>
+                    <th>车牌号</th>
+                    <th>生产厂家</th>
+                    <th>品牌</th>
+                    <th>投入运营日期</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vehicle in vehicles %}
+                <tr>
+                    <td>{{ vehicle.vehicle_number }}</td>
+                    <td><code>{{ vehicle.vin_code }}</code></td>
+                    <td><span class="license-plate">{{ vehicle.license_plate }}</span></td>
+                    <td>{{ vehicle.manufacturer }}</td>
+                    <td>{{ vehicle.brand }}</td>
+                    <td>{{ vehicle.operation_date|date:"Y-m-d" }}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button  class="edit-vehicle-btn" data-vehicle-id="{{ vehicle.id }}" onclick="showVehicleEditModal(this)">修改</button>
+                            <button  class="del-vehicle-btn"  data-url = "{% url 'delete_vehicle' vehicle.id %}" onclick="del(this)" >删除</button>
+
+                            <!-- <a href="{% url 'edit_vehicle' vehicle.id %}" class="btn-edit">
+                                修改
+                            </a> -->
+                            <!-- <a href="{% url 'delete_vehicle' vehicle.id %}" class="btn-delete">
+                                删除
+                            </a> -->
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <!-- 模态框结构 -->
+<div class="modal-overlay" id="vehicleModal">
+    <div class="modal-container">
+        <!-- <div class="modal-header">
+            <h3>添加新车辆</h3>
+            <span class="modal-close" onclick="closeVehicleModal()">&times;</span>
+        </div> -->
+        
+        <form id="vehicleForm" class="modal-form" data-base-action="{% url 'edit_vehicle' 0 %}" method="post">
+            <!-- 表单元素 -->
+            {% csrf_token %}
+            <div class="form-group">
+                <label>车辆编号</label>
+                <input type="text" name="vehicle_number" required>
+                <div class="error-msg"></div>
+            </div>
+
+            <div class="form-group">
+                <label>VIN码</label>
+                <!-- <input type="text" name="vin_code" required pattern="[A-HJ-NPR-Z0-9]{17}"> -->
+                <input type="text" name="vin_code" required>
+                <div class="error-msg"></div>
+            </div>
+
+            <div class="form-group">
+                <label>车牌号</label>
+                <input type="text" name="license_plate" required>
+                <div class="error-msg"></div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>生产厂家</label>
+                    <input type="text" name="manufacturer" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>品牌</label>
+                    <input type="text" name="brand" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>投入运营日期</label>
+                <input type="date" name="operation_date" required>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="modal-btn cancel" onclick="closeVehicleModal()">取消</button>
+                <button type="submit" class="modal-btn submit">保存车辆</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal-overlay" id="vehicleEditModal">
+    <div class="modal-container">
+        <!-- <div class="modal-header">
+            <h3>添加新车辆</h3>
+            <span class="modal-close" onclick="closeVehicleModal()">&times;</span>
+        </div> -->
+        
+        <form id="editForm" class="modal-form" action="/edit_vehicle/" method="post">
+            <!-- 表单元素 -->
+            {% csrf_token %}
+            <div class="form-group">
+                <label>车辆编号</label>
+                <input type="text" id="vehicle_number" name="vehicle_number" required value="">
+                <div class="error-msg"></div>
+            </div>
+
+            <div class="form-group">
+                <label>VIN码</label>
+                <!-- <input type="text" name="vin_code" required pattern="[A-HJ-NPR-Z0-9]{17}"> -->
+                <input type="text" id="vin_code" name="vin_code" required>
+                <div class="error-msg"></div>
+            </div>
+
+            <div class="form-group">
+                <label>车牌号</label>
+                <input type="text" id="license_plate" name="license_plate" required>
+                <div class="error-msg"></div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>生产厂家</label>
+                    <input type="text" id="manufacturer" name="manufacturer" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>品牌</label>
+                    <input type="text" id="brand" name="brand"required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>投入运营日期</label>
+                <input type="date" id="operation_date" name="operation_date" required>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="modal-btn cancel" onclick="closeVehicleEditModal()">取消</button>
+                <button type="submit" class="modal-btn submit">保存车辆</button>
+            </div>
+        </form>
+    </div>
+</div>
+    {% endblock %}

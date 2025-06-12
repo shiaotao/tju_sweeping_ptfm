@@ -1,0 +1,66 @@
+
+<!-- 
+{% block content %}
+<h2>登录</h2>
+<form method="post">
+    {% csrf_token %}
+    <div class="mb-3">
+        <label for="username" class="form-label">用户名</label>
+        <input type="text" class="form-control" id="username" name="username" required>
+    </div>
+    <div class="mb-3">
+        <label for="password" class="form-label">密码</label>
+        <input type="password" class="form-control" id="password" name="password" required>
+    </div>
+    <button type="submit" class="btn btn-primary">登录</button>
+</form>
+{% endblock %} -->
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天津大学智慧环卫系统</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+    <link rel="stylesheet" href="{% static 'css/login.css' %}">
+</head>
+<body>
+    <h1 class="system-title">天津大学智慧校园自主环卫管控系统</h1>
+    <div class="login-container">
+        <h1 class="login-title">用户登录</h1>
+        <form id="loginForm" method="post">
+            {% csrf_token %}
+            <div class="input-group">
+                <div class="input-wrapper">
+                    <i class="el-icon-user input-icon"></i>
+                    <input type="text" 
+                           class="form-input" 
+                           id="username" 
+                           name="username"
+                           placeholder="请输入用户名">
+                </div>
+                <div class="error-msg" id="usernameError"></div>
+            </div>
+            <!-- <input type="text" class="form-control" id="username" name="username" required> -->
+            <div class="input-group">
+                <div class="input-wrapper">
+                    <i class="el-icon-lock input-icon"></i>
+                    <input type="password" 
+                           class="form-input" 
+                           id="password" 
+                           name="password"
+                           placeholder="请输入密码">
+                </div>
+                <div class="error-msg" id="passwordError"></div>
+            </div>
+
+            <button type="submit" class="login-btn" >登录系统</button>
+        </form>
+    </div>
+
+    <script>
+
+    </script>
+</body>
+</html>
