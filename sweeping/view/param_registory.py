@@ -34,7 +34,7 @@ def param_registory(request):
 @login_required
 def prmReg_Origin(request):
     # About to Abort
-    return render(request, 'ExperimentalPage.html')
+    return render(request, 'experimentalPage.html')
 
 @login_required
 def prmReg_addRec(request):

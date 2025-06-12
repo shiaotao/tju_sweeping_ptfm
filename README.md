@@ -1,6 +1,10 @@
 TJU - ESTATES OFFICE Sweeping Platform - Section 2
 ---
 
+![image](https://github.com/user-attachments/assets/e570682b-82f8-491b-b85f-269b7c3e55e0)
+
+---
+
 # 1 Packages
 
 | Package           | Version |
@@ -20,6 +24,12 @@ TJU - ESTATES OFFICE Sweeping Platform - Section 2
 
 MySQL :: MySQL 5.7 参考文档 :: 2.3 在 Microsoft Windows 上安装MySQL
 > https://dev.mysql.com/doc/refman/5.7/en/windows-installation.html
+
+## 配置设置文件
+```
+# config/settings.py
+DEBUG = True
+```
 
 ## 生成迁移文件
 ```python manage.py makemigrations```

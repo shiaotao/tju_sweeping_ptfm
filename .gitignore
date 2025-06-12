@@ -11,6 +11,6 @@ __pycache__/
 *.log
 
 # 保护带有明文的文件
-# config/settings.py
+config/settings.py
 
 sweeping/static/js/vue.debug.js
